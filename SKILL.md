@@ -1,20 +1,33 @@
+---
+name: url-reader
+description: >
+  Multi-platform URL content fetcher with automatic fallback strategies.
+  Use when user shares a URL or asks to read/fetch/extract web content.
+  Supports: WeChat (微信公众号), Xiaohongshu (小红书), Twitter/X, Zhihu (知乎),
+  Douyin (抖音), Bilibili (B站), Weibo (微博), Taobao, JD, Feishu (飞书),
+  and any general webpage. Triggers: URL, 网页, 链接, read this page, fetch url,
+  抓取, 读取网页, 打开链接, 公众号文章, 帮我看看这个链接.
+  Three-layer strategy: Firecrawl -> Jina -> Playwright (auto fallback).
+  Outputs Markdown + HTML with embedded images.
+---
+
 # URL Reader Skill
 
 智能 URL 内容抓取工具，支持多平台内容提取，自动保存为 Markdown 并下载图片到本地。
 
-## 核心思路：三层策略自动降级
+## Instructions
+
+### Core Strategy: Three-Layer Auto Fallback
 
 ```
 Firecrawl（首选）→ Jina（备选）→ Playwright（兜底）
 ```
 
-- **Firecrawl**: AI驱动，能搞定96%的网站（免费500页/月）
+- **Firecrawl**: AI 驱动，能搞定 96% 的网站（免费 500 页/月）
 - **Jina**: 完全免费，大部分网站效果好
 - **Playwright**: 浏览器渲染，什么都能搞
 
-三层组合，基本能搞定99%的网站！
-
-## 快速开始
+### Quick Start
 
 ```bash
 cd ~/clawd/skills/url-reader
@@ -34,13 +47,16 @@ python3 scripts/url_reader.py "URL" --no-images
 # HTML 中嵌入 base64 图片（离线可看）
 python3 scripts/url_reader.py "URL" --format html --embed
 
+# 不嵌入 base64（引用本地图片路径）
+python3 scripts/url_reader.py "URL" --format html --no-embed
+
 # 指定策略
 python3 scripts/url_reader.py "URL" --strategy firecrawl
 python3 scripts/url_reader.py "URL" --strategy jina
 python3 scripts/url_reader.py "URL" --strategy playwright
 ```
 
-## 支持的平台
+### Supported Platforms
 
 | 平台 | 域名 | 首选策略 | 备注 |
 |------|------|----------|------|
@@ -56,7 +72,7 @@ python3 scripts/url_reader.py "URL" --strategy playwright
 | 飞书文档 | feishu.cn | Firecrawl | |
 | 普通网页 | * | Jina | 默认 |
 
-## 环境配置
+### Environment Setup
 
 ```bash
 # 必需：基础依赖
@@ -71,7 +87,7 @@ pip install playwright
 playwright install chromium
 ```
 
-## 输出结构
+### Output Structure
 
 ```
 output/
@@ -81,62 +97,60 @@ output/
     ├── metadata.json       # 元数据（标题、URL、平台等）
     └── images/
         ├── img_001.jpg
-        ├── img_002.png
         └── ...
 ```
 
-## 踩坑提醒
+### API Usage
 
-### 1. 微信公众号
+```python
+from url_reader import fetch_url, save_content
+from pathlib import Path
+
+result, config = fetch_url("https://example.com/article")
+if result.success:
+    print(f"标题: {result.metadata['title']}")
+    save_dir = save_content(
+        result.content, result.metadata,
+        Path("./output"), dl_images=True, cfg=config
+    )
+```
+
+## Examples
+
+```bash
+# 微信公众号
+python3 scripts/url_reader.py "https://mp.weixin.qq.com/s/xxxxx" --format both
+
+# Twitter/X 长文
+python3 scripts/url_reader.py "https://x.com/user/status/123" --output ./articles
+
+# 知乎问题
+python3 scripts/url_reader.py "https://www.zhihu.com/question/xxx" --no-images
+
+# 小红书笔记
+python3 scripts/url_reader.py "https://www.xiaohongshu.com/explore/xxx"
+```
+
+## Troubleshooting
+
+### 微信公众号
 - **用短链接**：`/s/xxxxx` 格式，长链接容易触发验证码
 - Firecrawl 效果最好，Jina 次之
 
-### 2. 小红书
+### 小红书
 - 图片下载需要正确的 Referer 头（已自动处理）
 - 部分内容需要登录态，Firecrawl 可能抓不到
 
-### 3. Firecrawl v2 返回值
+### Firecrawl v2 返回值
 - v2 返回 Document 对象，用 `getattr(result, 'markdown')` 而非 `.get()`
 
-### 4. 标题提取
+### 标题提取
 - 第一行可能是元数据（"来源:xxx"），需要跳过
 
-## 成本
+### Cost
 
 | 工具 | 成本 | 限制 |
 |------|------|------|
 | Jina | 免费 | 无 |
 | Firecrawl | 免费 | 500页/月 |
 | Playwright | 免费 | 需要约200MB存储 |
-
-**总成本: 0 元**
-
-## API 使用示例
-
-```python
-from url_reader import fetch_url, save_content
-from pathlib import Path
-
-# 抓取
-result, config = fetch_url("https://example.com/article")
-
-if result.success:
-    print(f"标题: {result.metadata['title']}")
-    print(f"内容: {result.content[:200]}...")
-    
-    # 保存
-    save_dir = save_content(
-        result.content,
-        result.metadata,
-        Path("./output"),
-        dl_images=True,
-        cfg=config
-    )
-```
-
-## 变现方向
-
-- **内容采集服务**: 帮自媒体批量采集素材
-- **竞品监控**: 监控竞争对手的公众号/小红书
-- **数据分析**: 采集行业内容做分析报告
-- **知识库建设**: 自动采集整理行业知识
