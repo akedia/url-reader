@@ -7,7 +7,7 @@ description: >
   Douyin (抖音), Bilibili (B站), Weibo (微博), Taobao, JD, Feishu (飞书),
   and any general webpage. Triggers: URL, 网页, 链接, read this page, fetch url,
   抓取, 读取网页, 打开链接, 公众号文章, 帮我看看这个链接.
-  Three-layer strategy: Firecrawl -> Jina -> Playwright (auto fallback).
+  Three-layer strategy: Markdown Direct -> Firecrawl -> Jina -> Playwright (auto fallback).
   Outputs Markdown + HTML with embedded images.
 ---
 
@@ -17,12 +17,13 @@ description: >
 
 ## Instructions
 
-### Core Strategy: Three-Layer Auto Fallback
+### Core Strategy: Four-Layer Auto Fallback
 
 ```
-Firecrawl（首选）→ Jina（备选）→ Playwright（兜底）
+Markdown Direct（最快）→ Firecrawl（AI驱动）→ Jina（免费）→ Playwright（兜底）
 ```
 
+- **Markdown Direct**: 直接请求 `Accept: text/markdown`，Cloudflare 等支持的站点直接返回 markdown，零额外成本，省 80% token
 - **Firecrawl**: AI 驱动，能搞定 96% 的网站（免费 500 页/月）
 - **Jina**: 完全免费，大部分网站效果好
 - **Playwright**: 浏览器渲染，什么都能搞

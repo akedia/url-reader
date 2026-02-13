@@ -161,6 +161,52 @@ def fetch_fxtwitter(url: str) -> FetchResult:
         return FetchResult(error=str(e))
 
 
+def fetch_markdown_direct(url: str) -> FetchResult:
+    """直接请求 markdown (Cloudflare Markdown for Agents 等支持 Accept: text/markdown 的站点)"""
+    headers = {
+        'Accept': 'text/markdown, text/html;q=0.9',
+        'User-Agent': 'Mozilla/5.0 (compatible; AgentFetch/1.0)'
+    }
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=15) as r:
+            ct = r.headers.get('Content-Type', '')
+            if 'markdown' not in ct:
+                return FetchResult(error="站点未返回 markdown")
+            content = r.read().decode('utf-8')
+
+        if len(content) < 50:
+            return FetchResult(error="内容太短")
+
+        token_count = None
+        # Cloudflare 返回 x-markdown-tokens header
+        try:
+            token_count = r.headers.get('x-markdown-tokens')
+        except:
+            pass
+
+        title = 'Untitled'
+        for line in content.split('\n'):
+            line = line.strip()
+            if line.startswith('# '):
+                title = line[2:].strip()
+                break
+            elif line.startswith('title:'):
+                title = line[6:].strip()
+                break
+
+        images = re.findall(r'!\[.*?\]\((https?://[^\)]+)\)', content)
+        meta = {'title': title, 'url': url, 'platform': 'markdown-direct', 'images': list(set(images))[:30]}
+        if token_count:
+            meta['token_count'] = token_count
+
+        return FetchResult(
+            content=content, success=True, metadata=meta
+        )
+    except Exception as e:
+        return FetchResult(error=str(e))
+
+
 def fetch_jina(url: str) -> FetchResult:
     """Jina Reader - 免费"""
     jina_url = f"https://r.jina.ai/{url}"
@@ -546,7 +592,7 @@ def fetch_url(url: str, strategy: str = 'auto') -> Tuple[FetchResult, PlatformCo
         elif cfg.preferred_strategy == 'playwright':
             strats = ['playwright', 'jina', 'firecrawl']
         else:
-            strats = ['jina', 'firecrawl', 'playwright']
+            strats = ['markdown-direct', 'jina', 'firecrawl', 'playwright']
     else:
         strats = [strategy]
     
@@ -554,6 +600,8 @@ def fetch_url(url: str, strategy: str = 'auto') -> Tuple[FetchResult, PlatformCo
         print(f"尝试: {s}")
         if s == 'fxtwitter':
             r = fetch_fxtwitter(url)
+        elif s == 'markdown-direct':
+            r = fetch_markdown_direct(url)
         elif s == 'jina':
             r = fetch_jina(url)
         elif s == 'firecrawl':
