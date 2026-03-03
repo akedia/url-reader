@@ -275,27 +275,51 @@ def fetch_firecrawl(url: str) -> FetchResult:
 
 
 async def fetch_playwright(url: str, cfg: PlatformConfig) -> FetchResult:
-    """Playwright - 浏览器渲染"""
+    """Playwright/Stealth - 浏览器渲染兜底"""
     try:
-        from playwright.async_api import async_playwright
-    except ImportError:
-        return FetchResult(error="未安装 playwright")
-    
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            ctx = await browser.new_context(user_agent=cfg.user_agent)
-            page = await ctx.new_page()
-            
-            if cfg.referer:
-                await page.set_extra_http_headers({'Referer': cfg.referer})
-            
-            await page.goto(url, wait_until='networkidle', timeout=60000)
-            await page.wait_for_timeout(cfg.wait_time)
-            
-            html = await page.content()
-            title = await page.title()
-            await browser.close()
+        html = ""
+        title = ""
+        
+        # 优先尝试 undetected_chromedriver
+        import subprocess, json
+        script_path = os.path.join(os.path.dirname(__file__), "fetch_uc.py")
+        if os.path.exists(script_path):
+            print("  [Stealth] 启用 undetected-chromedriver 穿透...")
+            cmd = ["xvfb-run", "-a", "python3", script_path, url, str(cfg.wait_time)]
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+                if res.returncode == 0:
+                    data = json.loads(res.stdout)
+                    if data.get("success"):
+                        html = data.get("html", "")
+                        title = data.get("title", "")
+                        print("  [Stealth] 穿透成功！")
+            except Exception as e:
+                print(f"  [Stealth] 尝试失败: {e}，回退至 Playwright")
+                
+        # 回退到 Playwright
+        if not html:
+            from playwright.async_api import async_playwright
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=["--disable-blink-features=AutomationControlled"]
+                )
+                ctx = await browser.new_context(
+                    user_agent=cfg.user_agent or "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+                await ctx.add_init_script("delete Object.getPrototypeOf(navigator).webdriver;")
+                page = await ctx.new_page()
+                
+                if cfg.referer:
+                    await page.set_extra_http_headers({'Referer': cfg.referer})
+                
+                await page.goto(url, wait_until='networkidle', timeout=60000)
+                await page.wait_for_timeout(cfg.wait_time)
+                
+                html = await page.content()
+                title = await page.title()
+                await browser.close()
         
         # 转 Markdown
         try:
@@ -306,7 +330,7 @@ async def fetch_playwright(url: str, cfg: PlatformConfig) -> FetchResult:
             for t in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
                 t.decompose()
             
-            # 提取标题 - 优先从 h1 或 og:title
+            # 提取标题
             if not title or title == '微信公众平台':
                 og_title = soup.find('meta', property='og:title')
                 if og_title:
@@ -316,16 +340,17 @@ async def fetch_playwright(url: str, cfg: PlatformConfig) -> FetchResult:
                     if h1:
                         title = h1.get_text(strip=True)
             
-            # 处理懒加载图片：把 data-src 复制到 src
+            # 处理图片
             for img in soup.find_all('img'):
                 data_src = img.get('data-src')
                 if data_src and data_src.startswith('http'):
                     img['src'] = data_src
-                # 移除 SVG 占位符
                 src = img.get('src', '')
                 if 'svg+xml' in src or '1px' in src or not src:
                     img.decompose()
             
+            # 提取正文
+            content = html
             for sel in ['article', '.article', '.content', '.post-content', '.rich_media_content', '#js_content', 'main']:
                 elem = soup.select_one(sel)
                 if elem and len(elem.get_text(strip=True)) > 100:
@@ -334,7 +359,6 @@ async def fetch_playwright(url: str, cfg: PlatformConfig) -> FetchResult:
             else:
                 content = markdownify.markdownify(str(soup.body or soup))
             
-            # 提取图片 - 包括 data-src
             images = []
             for img in soup.find_all('img'):
                 src = img.get('data-src') or img.get('src') or ''
@@ -345,9 +369,9 @@ async def fetch_playwright(url: str, cfg: PlatformConfig) -> FetchResult:
             content = html
             images = []
         
-        # 清理标题
         if title:
-            title = re.sub(r'\s*\|\s*.*$', '', title)  # 去掉 | 后面的部分
+            import re
+            title = re.sub(r'\s*\|\s*.*$', '', title)
         
         return FetchResult(
             content=content.strip(), success=True,
