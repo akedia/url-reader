@@ -1,14 +1,15 @@
 ---
 name: url-reader
-description: >
+description: |
   Multi-platform URL content fetcher with automatic fallback strategies.
   Use when user shares a URL or asks to read/fetch/extract web content.
   Supports: WeChat (微信公众号), Xiaohongshu (小红书), Twitter/X, Zhihu (知乎),
   Douyin (抖音), Bilibili (B站), Weibo (微博), Taobao, JD, Feishu (飞书),
-  and any general webpage. Triggers: URL, 网页, 链接, read this page, fetch url,
-  抓取, 读取网页, 打开链接, 公众号文章, 帮我看看这个链接.
-  Three-layer strategy: Markdown Direct -> Firecrawl -> Jina -> Playwright (auto fallback).
+  and any general webpage.
+  Triggers: URL, 网页, 链接, read this page, fetch url, 抓取, 读取网页, 打开链接, 公众号文章, 帮我看看这个链接.
+  Four-layer auto fallback: Markdown Direct, Firecrawl, Jina, Playwright (auto fallback).
   Outputs Markdown + HTML with embedded images.
+  NOT for: searching the web, creating new content, or non-URL tasks.
 ---
 
 # URL Reader Skill
@@ -155,3 +156,6 @@ python3 scripts/url_reader.py "https://www.xiaohongshu.com/explore/xxx"
 | Jina | 免费 | 无 |
 | Firecrawl | 免费 | 500页/月 |
 | Playwright | 免费 | 需要约200MB存储 |
+
+## Evals
+See references/evals/trigger-cases.md and references/evals/platform-rubric.md
