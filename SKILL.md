@@ -18,6 +18,16 @@ description: |
 
 ## Instructions
 
+### ⚠️ 调用须知
+
+**始终使用绝对路径调用 `fetch.py`（不是 `scripts/url_reader.py`）**：
+
+```bash
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "URL"
+```
+
+原因：`scripts/url_reader.py` 的默认 `--output ./output` 依赖 exec cwd，cwd 不固定会导致文章落到错误目录（如 workspace 根目录）。`fetch.py` wrapper 会自动注入正确的绝对路径，无需手动指定 `--output`。
+
 ### Core Strategy: Four-Layer Auto Fallback
 
 ```
@@ -32,30 +42,43 @@ Markdown Direct（最快）→ Firecrawl（AI驱动）→ Jina（免费）→ Pl
 ### Quick Start
 
 ```bash
-cd ~/clawd/skills/url-reader
-
-# 基本用法
-python3 scripts/url_reader.py "https://mp.weixin.qq.com/s/xxxxx"
+# 基本用法（始终用绝对路径）
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "https://mp.weixin.qq.com/s/xxxxx"
 
 # 同时输出 Markdown 和 HTML
-python3 scripts/url_reader.py "URL" --format both
-
-# 保存到指定目录
-python3 scripts/url_reader.py "URL" --output ./articles
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "URL" --format both
 
 # 不下载图片
-python3 scripts/url_reader.py "URL" --no-images
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "URL" --no-images
 
 # HTML 中嵌入 base64 图片（离线可看）
-python3 scripts/url_reader.py "URL" --format html --embed
-
-# 不嵌入 base64（引用本地图片路径）
-python3 scripts/url_reader.py "URL" --format html --no-embed
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "URL" --format html --embed
 
 # 指定策略
-python3 scripts/url_reader.py "URL" --strategy firecrawl
-python3 scripts/url_reader.py "URL" --strategy jina
-python3 scripts/url_reader.py "URL" --strategy playwright
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "URL" --strategy firecrawl
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "URL" --strategy jina
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "URL" --strategy playwright
+```
+
+### Output
+
+文章保存到 `/home/clawd/clawd/skills/url-reader/output/YYYY-MM-DD_标题/`：
+
+```
+output/
+└── 2026-04-09_文章标题/
+    ├── article.md          # Markdown 正文
+    ├── article.html        # HTML 版本（可选）
+    ├── metadata.json       # 元数据（标题、URL、平台等）
+    └── images/
+        ├── img_001.jpg
+        └── ...
+```
+
+读取内容：
+
+```bash
+cat /home/clawd/clawd/skills/url-reader/output/$(ls -t /home/clawd/clawd/skills/url-reader/output/ | head -1)/article.md
 ```
 
 ### Supported Platforms
@@ -89,22 +112,11 @@ pip install playwright
 playwright install chromium
 ```
 
-### Output Structure
-
-```
-output/
-└── 2026-02-05_文章标题/
-    ├── article.md          # Markdown 正文
-    ├── article.html        # HTML 版本（可选）
-    ├── metadata.json       # 元数据（标题、URL、平台等）
-    └── images/
-        ├── img_001.jpg
-        └── ...
-```
-
-### API Usage
+### API Usage (Python)
 
 ```python
+import sys
+sys.path.insert(0, '/home/clawd/clawd/skills/url-reader/scripts')
 from url_reader import fetch_url, save_content
 from pathlib import Path
 
@@ -113,7 +125,8 @@ if result.success:
     print(f"标题: {result.metadata['title']}")
     save_dir = save_content(
         result.content, result.metadata,
-        Path("./output"), dl_images=True, cfg=config
+        Path('/home/clawd/clawd/skills/url-reader/output'),
+        dl_images=True, cfg=config
     )
 ```
 
@@ -121,16 +134,16 @@ if result.success:
 
 ```bash
 # 微信公众号
-python3 scripts/url_reader.py "https://mp.weixin.qq.com/s/xxxxx" --format both
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "https://mp.weixin.qq.com/s/xxxxx" --format both
 
-# Twitter/X 长文
-python3 scripts/url_reader.py "https://x.com/user/status/123" --output ./articles
+# Twitter/X 推文
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "https://x.com/user/status/123"
 
 # 知乎问题
-python3 scripts/url_reader.py "https://www.zhihu.com/question/xxx" --no-images
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "https://www.zhihu.com/question/xxx" --no-images
 
-# 小红书笔记
-python3 scripts/url_reader.py "https://www.xiaohongshu.com/explore/xxx"
+# Substack 文章
+python3 /home/clawd/clawd/skills/url-reader/fetch.py "https://xxx.substack.com/p/xxx"
 ```
 
 ## Troubleshooting
@@ -143,11 +156,12 @@ python3 scripts/url_reader.py "https://www.xiaohongshu.com/explore/xxx"
 - 图片下载需要正确的 Referer 头（已自动处理）
 - 部分内容需要登录态，Firecrawl 可能抓不到
 
+### 文章没落盘 / 落到错误目录
+- 必须用 `fetch.py` 而不是 `scripts/url_reader.py`
+- `fetch.py` 自动注入正确的 `--output` 绝对路径
+
 ### Firecrawl v2 返回值
 - v2 返回 Document 对象，用 `getattr(result, 'markdown')` 而非 `.get()`
-
-### 标题提取
-- 第一行可能是元数据（"来源:xxx"），需要跳过
 
 ### Cost
 
